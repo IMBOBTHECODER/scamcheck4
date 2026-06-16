@@ -213,7 +213,7 @@
 </div>
 
 <script type="module">
-  import { GoogleGenerativeAI } from 'https://esm.run/@google/generative-ai';
+  import { GoogleGenAI } from 'https://esm.run/@google/genai';
 
   // ─── PUT YOUR API KEY HERE ───────────────────────────────────────────────
   const API_KEY = 'AQ.Ab8RN6KqdY7cFe5OCfHcrnXIK_vUUr-4GMK3Ix19PS3G5xmbnQ';
@@ -237,12 +237,7 @@ Level guide:
 3 = High risk: clear scam indicators — impersonation, fake prizes, requests for money/OTP/passwords, urgent pressure, phishing links
 The flags array should list specific red flags found (or "No major red flags" if level 1). Keep flags short (2-5 words each). Return only valid JSON.`;
 
-  const genAI = new GoogleGenerativeAI(API_KEY);
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
-    systemInstruction: systemPrompt,
-    generationConfig: { maxOutputTokens: 500, responseMimeType: 'application/json' },
-  });
+  const ai = new GoogleGenAI({ apiKey: API_KEY });
 
   const btn        = document.getElementById('scan-btn');
   const btnIcon    = document.getElementById('btn-icon');
@@ -274,8 +269,19 @@ The flags array should list specific red flags found (or "No major red flags" if
     resultCard.className = 'card result-card';
 
     try {
-      const result = await model.generateContent(msg);
-      const raw = result.response.text();
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: msg,
+        config: {
+          systemInstruction: systemPrompt,
+          maxOutputTokens: 500,
+          responseMimeType: 'application/json',
+        },
+      });
+
+      const raw = response.text;
+      if (!raw) { showError('Empty response from API.'); return; }
+
       let parsed;
       try {
         parsed = JSON.parse(raw);
@@ -303,7 +309,7 @@ The flags array should list specific red flags found (or "No major red flags" if
         flagsEl.appendChild(span);
       });
     } catch (e) {
-      showError(e.message || 'Error. Try again.');
+      showError(e.message || 'Network error. Check your connection.');
     } finally {
       setLoading(false);
     }
