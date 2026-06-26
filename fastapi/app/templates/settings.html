@@ -27,6 +27,16 @@
         </select>
     </label>
 
+    {# Text size — scales the root font for easier reading (accessibility) #}
+    <label>
+        <span>{{ t.text_size_label }}</span>
+        <select name="text_size">
+            <option value="normal" {% if text_size == 'normal' %}selected{% endif %}>{{ t.text_size_normal }}</option>
+            <option value="large"  {% if text_size == 'large' %}selected{% endif %}>{{ t.text_size_large }}</option>
+            <option value="xlarge" {% if text_size == 'xlarge' %}selected{% endif %}>{{ t.text_size_xlarge }}</option>
+        </select>
+    </label>
+
     <button type="submit"><span>{{ t.save_button }}</span></button>
 </form>
 

@@ -46,6 +46,17 @@
             </svg>
             <span>{{ t.tab_image }}</span>
         </button>
+        {# Voice tab — revealed by JS only where speech recognition works #}
+        <button type="button" id="tab-voice" class="input-tab" role="tab"
+            aria-selected="false" aria-controls="panel-voice" hidden>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3m0 0h-3.75m3.75 0h3.75M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 0 1 6 0v8.25a3 3 0 0 1-3 3Z"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span>{{ t.tab_voice }}</span>
+        </button>
+        {# Sliding underline that glides to the active tab (positioned by JS) #}
+        <span class="tab-indicator" id="tab-indicator" aria-hidden="true"></span>
     </div>
 
     {# Text panel #}
@@ -98,6 +109,23 @@
                 <span id="image-name" class="image-name"></span>
                 <button type="button" id="image-remove" class="text-tool-btn">{{ t.image_remove }}</button>
             </div>
+        </div>
+    </div>
+
+    {# Voice panel — tap the mic and speak; the transcript fills the shared
+       textarea (in the text panel) so the form posts it like typed text. #}
+    <div id="panel-voice" class="input-panel" role="tabpanel" aria-labelledby="tab-voice" hidden>
+        <div class="voice-pad">
+            <button type="button" id="voice-mic" class="voice-mic" aria-pressed="false"
+                aria-label="{{ t.voice_button }}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3m0 0h-3.75m3.75 0h3.75M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 0 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+                </svg>
+            </button>
+            <p id="voice-status" class="voice-status">{{ t.voice_hint }}</p>
+            <p id="voice-transcript" class="voice-transcript" aria-live="polite" hidden></p>
+            <button type="button" id="voice-edit" class="text-tool-btn" hidden>{{ t.voice_edit }}</button>
         </div>
     </div>
 
@@ -206,6 +234,12 @@
         var MSG_CLIPBOARD_SUCCESS = {{ t.clipboard_success|tojson }};
         var MSG_CLIPBOARD_DENIED = {{ t.clipboard_denied|tojson }};
         var MSG_WORD_LIMIT = {{ t.word_limit_toast|replace('{max}', max_length|string)|tojson }};
+        var MSG_VOICE_HINT = {{ t.voice_hint|tojson }};
+        var MSG_VOICE_LISTENING = {{ t.voice_listening|tojson }};
+        var MSG_VOICE_DENIED = {{ t.voice_denied|tojson }};
+        var MSG_VOICE_ERROR = {{ t.voice_error|tojson }};
+        // BCP-47 tag for speech recognition, matched to the UI language.
+        var VOICE_LANG = {{ ('vi-VN' if language == 'vi' else 'en-US')|tojson }};
         var input = document.getElementById("input-text");
         var count = document.getElementById("char-count");
         var form = document.getElementById("check-form");
@@ -283,18 +317,54 @@
             input.focus();
         });
 
-        // Tabs: switch between the text and image panels.
+        // Tabs: switch between the text / image / voice panels.
+        var tabVoice = document.getElementById("tab-voice");
+        var panelVoice = document.getElementById("panel-voice");
+        var voiceTranscript = document.getElementById("voice-transcript");
+        var voiceEdit = document.getElementById("voice-edit");
+        var indicator = document.getElementById("tab-indicator");
+        var TABS = { text: tabText, image: tabImage, voice: tabVoice };
+        var PANELS = { text: panelText, image: panelImage, voice: panelVoice };
+
+        // Glide the underline to sit exactly under the active tab (tabs are
+        // variable width, so position + width are measured, not assumed).
+        function moveIndicator(tab) {
+            if (!indicator || !tab || tab.hidden) { return; }
+            indicator.style.width = tab.offsetWidth + "px";
+            indicator.style.transform = "translateX(" + tab.offsetLeft + "px)";
+        }
+
+        function syncVoicePanel() {
+            if (!voiceTranscript) { return; }
+            voiceTranscript.textContent = input.value;
+            voiceTranscript.hidden = input.value.length === 0;
+            if (voiceEdit) { voiceEdit.hidden = input.value.length === 0; }
+        }
+
         function switchTab(which) {
-            var isText = which === "text";
-            tabText.classList.toggle("is-active", isText);
-            tabImage.classList.toggle("is-active", !isText);
-            tabText.setAttribute("aria-selected", isText ? "true" : "false");
-            tabImage.setAttribute("aria-selected", !isText ? "true" : "false");
-            panelText.hidden = !isText;
-            panelImage.hidden = isText;
+            Object.keys(TABS).forEach(function (key) {
+                var tab = TABS[key], panel = PANELS[key];
+                if (!tab || !panel) { return; }
+                var on = key === which;
+                tab.classList.toggle("is-active", on);
+                tab.setAttribute("aria-selected", on ? "true" : "false");
+                panel.hidden = !on;
+            });
+            moveIndicator(TABS[which]);
+            if (which === "voice") { syncVoicePanel(); }
         }
         tabText.addEventListener("click", function () { switchTab("text"); });
         tabImage.addEventListener("click", function () { switchTab("image"); });
+        if (tabVoice) { tabVoice.addEventListener("click", function () { switchTab("voice"); }); }
+
+        // Position the underline under the initially-active tab, and keep it
+        // aligned on resize / after web fonts settle.
+        function realignIndicator() {
+            moveIndicator(document.querySelector(".input-tab.is-active") || tabText);
+        }
+        realignIndicator();
+        window.addEventListener("load", realignIndicator);
+        window.addEventListener("resize", realignIndicator);
 
         // The dropzone proxies clicks/keyboard to the hidden file input.
         dropzone.addEventListener("click", function (e) {
@@ -427,6 +497,80 @@
             });
         });
 
+        // ── Voice input tab (Web Speech API) — tap the mic and dictate ──
+        // Support is uneven (Chrome/Edge yes, Firefox no), so the tab stays
+        // hidden unless the API exists. Recognised speech fills the shared
+        // textarea so the form posts it exactly like typed text.
+        var voiceMic = document.getElementById("voice-mic");
+        var voiceStatus = document.getElementById("voice-status");
+        var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (voiceMic && tabVoice && SpeechRec) {
+            tabVoice.hidden = false;             // expose the tab where it works
+            realignIndicator();                  // a new tab may shift widths
+            var recognition = null;
+            var listening = false;
+            var baseText = "";   // text already in the box when dictation started
+
+            function setListening(on) {
+                listening = on;
+                voiceMic.classList.toggle("is-listening", on);
+                voiceMic.setAttribute("aria-pressed", on ? "true" : "false");
+                if (voiceStatus) { voiceStatus.textContent = on ? MSG_VOICE_LISTENING : MSG_VOICE_HINT; }
+            }
+
+            voiceMic.addEventListener("click", function () {
+                if (listening && recognition) { recognition.stop(); return; }
+                recognition = new SpeechRec();
+                recognition.lang = VOICE_LANG;
+                recognition.interimResults = true;
+                recognition.continuous = true;
+                baseText = input.value;
+
+                recognition.onresult = function (e) {
+                    var finalText = "", interim = "";
+                    for (var i = e.resultIndex; i < e.results.length; i++) {
+                        var chunk = e.results[i][0].transcript;
+                        if (e.results[i].isFinal) { finalText += chunk; }
+                        else { interim += chunk; }
+                    }
+                    // Commit finalised words to baseText; show interim live.
+                    if (finalText) {
+                        if (baseText && !/\s$/.test(baseText)) { baseText += " "; }
+                        baseText += finalText;
+                    }
+                    var preview = baseText;
+                    if (interim) {
+                        if (preview && !/\s$/.test(preview)) { preview += " "; }
+                        preview += interim;
+                    }
+                    input.value = preview.slice(0, MAX);
+                    render();
+                    syncVoicePanel();
+                };
+                recognition.onerror = function (ev) {
+                    showToast(ev.error === "not-allowed" || ev.error === "service-not-allowed"
+                        ? MSG_VOICE_DENIED : MSG_VOICE_ERROR, "error");
+                    setListening(false);
+                };
+                recognition.onend = function () { setListening(false); };
+
+                try {
+                    recognition.start();
+                    setListening(true);
+                } catch (err) {
+                    setListening(false);
+                }
+            });
+
+            // "Review in the text box" → jump to the text tab to edit.
+            if (voiceEdit) {
+                voiceEdit.addEventListener("click", function () {
+                    switchTab("text");
+                    input.focus();
+                });
+            }
+        }
+
         function setInfoOpen(open) {
             infoPanel.hidden = !open;
             infoButton.setAttribute("aria-expanded", open ? "true" : "false");
@@ -449,7 +593,15 @@
             }
         });
 
+        var submitting = false;
         form.addEventListener("submit", function (e) {
+            // Block duplicate submits: a check is a slow round-trip, so
+            // spam-clicking would fire several POSTs before the page navigates
+            // away — each one a wasted Gemini call and a duplicate history row.
+            if (submitting) {
+                e.preventDefault();
+                return;
+            }
             var text = input.value.trim();
             if (!text && !hasImage()) {
                 e.preventDefault();
@@ -458,15 +610,23 @@
                 e.preventDefault();
                 alert(MSG_LONG);
             } else {
-                // Valid submit → show the loading overlay while the server analyzes.
+                // Valid submit → lock the form and show the loading overlay
+                // while the server analyzes. Disabling the button stops further
+                // clicks; the submit already in flight is unaffected.
+                submitting = true;
+                if (submitButton) { submitButton.disabled = true; }
                 overlay.classList.add("show");
             }
         });
 
         // Hide the overlay if the user returns via the browser's back button
-        // (the page may be restored from the bfcache with the overlay visible).
+        // (the page may be restored from the bfcache with the overlay visible),
+        // and unlock the form so a fresh check can be submitted. Stay locked if
+        // offline — base.html's offline handler owns the button in that case.
         window.addEventListener("pageshow", function () {
             overlay.classList.remove("show");
+            submitting = false;
+            if (submitButton && navigator.onLine) { submitButton.disabled = false; }
         });
     })();
 </script>

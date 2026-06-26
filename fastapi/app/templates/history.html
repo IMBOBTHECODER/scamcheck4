@@ -29,9 +29,9 @@
 {% elif not scans %}
 <p>{{ t.no_history }}</p>
 {% else %}
-{# Compact table (newest first, max 10) — each row links to its result page.
-   Only the verdict, a one-line message preview and the time are shown here;
-   signals and actions live on the result page. #}
+{# Compact table (newest first, 10 per page) — each row links to its result
+   page. Only the verdict, a one-line message preview and the signal count are
+   shown here; signals and actions live on the result page. #}
 <div class="hist-table-wrap">
 <table class="hist-table">
     <thead>
@@ -62,5 +62,20 @@
     </tbody>
 </table>
 </div>
+
+{# Page navigation — always shown (even "Trang 1/1"); prev/next dim at the ends #}
+<nav class="pagination" aria-label="{{ t.history_heading }}">
+    {% if page > 1 %}
+    <a class="page-btn" href="/history?page={{ page - 1 }}" rel="prev">← {{ t.prev_page }}</a>
+    {% else %}
+    <span class="page-btn is-disabled" aria-disabled="true">← {{ t.prev_page }}</span>
+    {% endif %}
+    <span class="page-status">{{ t.page_status|replace('{page}', page|string)|replace('{total}', total_pages|string) }}</span>
+    {% if page < total_pages %}
+    <a class="page-btn" href="/history?page={{ page + 1 }}" rel="next">{{ t.next_page }} →</a>
+    {% else %}
+    <span class="page-btn is-disabled" aria-disabled="true">{{ t.next_page }} →</span>
+    {% endif %}
+</nav>
 {% endif %}
 {% endblock %}

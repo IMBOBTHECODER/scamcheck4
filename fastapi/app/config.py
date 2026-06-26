@@ -67,11 +67,14 @@ APP_VERSION = "0.1.0"
 # Gemini models offered in the settings page (first is the default).
 AVAILABLE_LANGUAGES = ["vi", "en"]
 AVAILABLE_THEMES = ["dark", "light", "auto"]
+# Root font scales for the settings "text size" control (accessibility).
+AVAILABLE_TEXT_SIZES = ["normal", "large", "xlarge"]
 
 # Default per-device preferences (until changed on the settings page).
 DEFAULT_PREFERENCES = {
     "theme": "dark",
     "language": "vi",
+    "text_size": "normal",
 }
 
 

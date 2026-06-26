@@ -57,6 +57,12 @@ h1 {
 
 html { overflow-x: hidden; }  /* full-bleed hero uses 100vw; clip scrollbar-width overhang */
 
+/* Text-size preference (settings → "Cỡ chữ"). Scaling the root font scales
+   every rem-based size, so text and controls grow together — easier for
+   older users. "normal" is the 100% default. */
+html[data-text-size="large"]  { font-size: 112.5%; }
+html[data-text-size="xlarge"] { font-size: 125%; }
+
 body {
     margin: 0;
     min-height: 100vh;
@@ -119,6 +125,18 @@ nav a {
 
 nav a:hover { color: var(--fg); text-decoration: none; }
 
+/* Desktop: links sit inline, pushed to the right edge of the bar. */
+.nav-links-inline {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-left: auto;
+}
+
+/* Hamburger and off-canvas drawer are hidden until the mobile breakpoint. */
+.nav-toggle { display: none; }
+.sidebar { display: none; }
+
 nav .brand {
     display: inline-flex;
     align-items: center;
@@ -135,7 +153,100 @@ nav .brand-icon {
     color: var(--accent);
 }
 
-nav .nav-spacer { flex: 1; }
+/* ── Mobile off-canvas sidebar ─────────────────────────────────────────── */
+.nav-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+}
+
+.nav-backdrop[hidden] { display: none; }
+
+body.nav-open { overflow: hidden; }   /* lock background scroll while open */
+
+@media (max-width: 720px) {
+    /* Tighter gutters everywhere so content stops overflowing on phones. */
+    nav { padding: 0.8rem 1.1rem; }
+
+    .nav-links-inline { display: none; }   /* swap inline links for the drawer */
+
+    .nav-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: auto;
+        padding: 0.3rem;
+        color: var(--fg);
+        background: none;
+        border: 0;
+        cursor: pointer;
+    }
+
+    .nav-toggle-icon { width: 1.65rem; height: 1.65rem; }
+
+    /* Drawer: anchored at the right edge and revealed with a fade. We do NOT
+       park it off-screen (e.g. translateX(100%)) because it's position:fixed,
+       and a fixed element sitting outside the viewport adds a horizontal
+       scroll strip that html's overflow-x:hidden can't clip (its containing
+       block is the viewport, not <html>). Fading in place keeps it in bounds.
+       visibility:hidden also keeps the closed links out of the tab order. */
+    .sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        position: fixed;
+        top: 0;
+        right: 0;
+        z-index: 50;
+        height: 100%;
+        width: min(80vw, 300px);
+        padding: 1rem;
+        background: var(--bg);
+        border-left: 1px solid var(--border);
+        box-shadow: -12px 0 40px rgba(0, 0, 0, 0.35);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s ease, visibility 0.2s ease;
+        overflow-y: auto;
+    }
+
+    .sidebar.is-open {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    .sidebar a {
+        padding: 0.85rem 0.75rem;
+        border-radius: 10px;
+        font-size: 1.05rem;        /* larger tap targets for older users */
+    }
+
+    .sidebar a:hover {
+        background: color-mix(in srgb, var(--accent) 10%, transparent);
+    }
+
+    .sidebar-close {
+        display: inline-flex;
+        align-self: flex-end;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 0.5rem;
+        padding: 0.3rem;
+        color: var(--muted);
+        background: none;
+        border: 0;
+        cursor: pointer;
+    }
+
+    .sidebar-close-icon { width: 1.5rem; height: 1.5rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sidebar { transition: none; }
+    .tab-indicator { transition: none; }
+}
 
 main {
     max-width: 760px;
@@ -204,8 +315,9 @@ textarea:focus {
     color: var(--muted);
 }
 
-/* ── Tabbed input (text vs image) ──────────────────────────────────────── */
+/* ── Tabbed input (text / image / voice) ───────────────────────────────── */
 .input-tabs {
+    position: relative;            /* anchors the sliding underline */
     display: flex;
     gap: 0.3rem;
     width: 100%;
@@ -235,12 +347,90 @@ textarea:focus {
 
 .input-tab.is-active {
     color: var(--accent);
-    border-bottom-color: var(--accent);
+    /* underline is drawn by the gliding .tab-indicator, not a static border */
+}
+
+/* The animated underline that slides between tabs (sized/placed by JS). */
+.tab-indicator {
+    position: absolute;
+    left: 0;
+    bottom: -1px;                 /* sit on the divider line */
+    width: 0;
+    height: 2px;
+    background: var(--accent);
+    border-radius: 2px;
+    transform: translateX(0);
+    transition: transform 0.25s ease, width 0.25s ease;
+    pointer-events: none;
 }
 
 .input-panel { width: 100%; }
 .input-panel[hidden] { display: none; }
 .input-panel .presets { margin-bottom: 0.8rem; }
+
+/* ── Voice panel (mic + live transcript) ───────────────────────────────── */
+.voice-pad {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    min-height: 11rem;
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.voice-mic {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 5rem;
+    height: 5rem;
+    border-radius: 50%;
+    color: #fff;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 35%, transparent);
+    transition: transform 0.12s ease, filter 0.15s ease;
+}
+
+.voice-mic:hover { filter: brightness(1.07); }
+.voice-mic:active { transform: translateY(1px); }
+.voice-mic svg { width: 2.2rem; height: 2.2rem; }
+
+/* Recording state — red, with a pulsing ring. */
+.voice-mic.is-listening { background: linear-gradient(135deg, #f85149, #d29922); }
+
+@media (prefers-reduced-motion: no-preference) {
+    .voice-mic.is-listening { animation: mic-pulse 1.5s ease-out infinite; }
+}
+
+@keyframes mic-pulse {
+    0% { box-shadow: 0 0 0 0 color-mix(in srgb, #f85149 50%, transparent); }
+    70% { box-shadow: 0 0 0 18px color-mix(in srgb, #f85149 0%, transparent); }
+    100% { box-shadow: 0 0 0 0 color-mix(in srgb, #f85149 0%, transparent); }
+}
+
+.voice-status {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.95rem;
+}
+
+.voice-transcript {
+    margin: 0;
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    text-align: left;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.voice-transcript[hidden] { display: none; }
 
 .text-meta {
     display: flex;
@@ -337,7 +527,7 @@ form.drag-active {
 
 /* Generic button (Save, Clear, etc.). The special homepage Check button uses
    .sparkle-button (see bottom of file) and opts out of these rules via :not(). */
-button:not(.sparkle-button):not(.preset-btn):not(.info-button):not(.text-tool-btn):not(.input-tab) {
+button:not(.sparkle-button):not(.preset-btn):not(.info-button):not(.text-tool-btn):not(.input-tab):not(.nav-toggle):not(.sidebar-close):not(.voice-mic) {
     padding: 0.6rem 1.4rem;
     font: inherit;
     font-weight: 600;
@@ -350,11 +540,11 @@ button:not(.sparkle-button):not(.preset-btn):not(.info-button):not(.text-tool-bt
     transition: filter 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
 }
 
-button:not(.sparkle-button):not(.preset-btn):not(.info-button):not(.text-tool-btn):not(.input-tab):hover {
+button:not(.sparkle-button):not(.preset-btn):not(.info-button):not(.text-tool-btn):not(.input-tab):not(.nav-toggle):not(.sidebar-close):not(.voice-mic):hover {
     filter: brightness(1.08);
     box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 42%, transparent);
 }
-button:not(.sparkle-button):not(.preset-btn):not(.info-button):not(.text-tool-btn):not(.input-tab):active { transform: translateY(1px); }
+button:not(.sparkle-button):not(.preset-btn):not(.info-button):not(.text-tool-btn):not(.input-tab):not(.nav-toggle):not(.sidebar-close):not(.voice-mic):active { transform: translateY(1px); }
 
 /* Quick-test preset chips above the textarea */
 .presets {
@@ -545,6 +735,27 @@ button:not(.sparkle-button):not(.preset-btn):not(.info-button):not(.text-tool-bt
     background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
+/* The voice button is revealed by JS only where speech recognition works;
+   the author display:inline-flex above would otherwise beat the hidden attr. */
+.text-tool-btn[hidden] { display: none; }
+
+/* Recording state for the voice (mic) button — red, gently pulsing. */
+.text-tool-btn.is-listening,
+.text-tool-btn.is-listening:hover {
+    color: #f85149;
+    border-color: color-mix(in srgb, #f85149 55%, transparent);
+    background: color-mix(in srgb, #f85149 12%, transparent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .text-tool-btn.is-listening { animation: pulse-rec 1.4s ease-in-out infinite; }
+}
+
+@keyframes pulse-rec {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+}
+
 .toast {
     position: fixed;
     right: 1rem;
@@ -642,6 +853,32 @@ button:not(.sparkle-button):not(.preset-btn):not(.info-button):not(.text-tool-bt
 .char-count.over {
     color: #f85149;
     font-weight: 600;
+}
+
+/* ── Offline banner ────────────────────────────────────────────────────── */
+.offline-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1rem;
+    font-size: 0.92rem;
+    font-weight: 500;
+    color: var(--fg);
+    background: rgba(210, 153, 34, 0.16);
+    border-bottom: 1px solid rgba(210, 153, 34, 0.5);
+    text-align: center;
+}
+
+.offline-banner[hidden] {
+    display: none;
+}
+
+.offline-icon {
+    width: 1.15rem;
+    height: 1.15rem;
+    flex-shrink: 0;
+    color: #d29922;
 }
 
 /* ── Alerts / notices ──────────────────────────────────────────────────── */
@@ -814,6 +1051,38 @@ button:not(.sparkle-button):not(.preset-btn):not(.info-button):not(.text-tool-bt
 .rescue-yes {
     background: linear-gradient(135deg, #f85149, #d29922) !important;
     box-shadow: 0 4px 14px color-mix(in srgb, #f85149 35%, transparent) !important;
+}
+
+/* Praise shown when the user says they did NOT act on the scam (green/positive) */
+.rescue-praise {
+    margin-top: 1.4rem;
+    padding: 1.1rem 1.3rem;
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, #3fb950 45%, transparent);
+    border-left: 4px solid #3fb950;
+    background: color-mix(in srgb, #3fb950 11%, transparent);
+    box-shadow: var(--shadow);
+}
+
+.rescue-praise[hidden] { display: none; }
+
+.rescue-praise-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0 0 0.5rem;
+    color: #3fb950;
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.rescue-praise-icon { width: 1.3em; height: 1.3em; flex-shrink: 0; }
+
+.rescue-praise p {
+    margin: 0;
+    font-size: 1.08rem;
+    line-height: 1.75;
+    color: var(--fg);
 }
 
 /* The generated guidance (red-accented — this is the emergency path) */
@@ -1098,6 +1367,48 @@ h2 { margin-top: 2.2rem; }
 .hist-row:hover .hist-view-icon {
     transform: translateX(3px);
     color: var(--accent);
+}
+
+/* History pagination (prev / page X of Y / next) */
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.page-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.45rem 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--fg);
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+a.page-btn:hover,
+a.page-btn:focus-visible {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.page-btn.is-disabled {
+    opacity: 0.45;
+    color: var(--muted);
+    pointer-events: none;
+}
+
+.page-status {
+    color: var(--muted);
+    font-size: 0.9rem;
+    font-variant-numeric: tabular-nums;
 }
 
 .clear-form {
@@ -1589,4 +1900,12 @@ footer {
     -webkit-background-clip: text;
     background-clip: text;
   }
+}
+
+/* ── Mobile gutters ────────────────────────────────────────────────────────
+   Placed at the end of the file on purpose: it must override the base `main`
+   and `footer` rules (which appear earlier), so tighter phone gutters win. */
+@media (max-width: 720px) {
+    main { padding: 1.1rem 1.1rem 2rem; }
+    footer { padding: 1.2rem 1.1rem 2rem; }
 }

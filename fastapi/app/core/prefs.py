@@ -4,11 +4,17 @@ No accounts and no database: each browser keeps its own theme/language in its
 session cookie. Reads validate against the allowed sets and fall back to
 defaults, so a tampered cookie can never inject bad values.
 """
-from config import AVAILABLE_LANGUAGES, AVAILABLE_THEMES, DEFAULT_PREFERENCES
+from config import (
+    AVAILABLE_LANGUAGES,
+    AVAILABLE_TEXT_SIZES,
+    AVAILABLE_THEMES,
+    DEFAULT_PREFERENCES,
+)
 
 _ALLOWED = {
     "theme": AVAILABLE_THEMES,
     "language": AVAILABLE_LANGUAGES,
+    "text_size": AVAILABLE_TEXT_SIZES,
 }
 
 

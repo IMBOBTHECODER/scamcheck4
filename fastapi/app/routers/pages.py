@@ -29,6 +29,7 @@ templates = Jinja2Templates(directory="templates")
 logger = logging.getLogger("scamcheck.pages")
 _CLEARED_HISTORY = {}
 _UNDO_TTL_SECONDS = 10 * 60
+HISTORY_PER_PAGE = 10   # rows shown per history page (older rows are paginated)
 
 
 def _prune_cleared_history():
@@ -51,6 +52,7 @@ def _ctx(request: Request, title: str, **extra) -> dict:
         "t": i18n.strings(p["language"]),
         "theme": p["theme"],
         "language": p["language"],
+        "text_size": p["text_size"],
     }
     context.update(extra)
     return context
@@ -297,18 +299,25 @@ def result_help(request: Request, public_id: str, db: Session = Depends(get_db))
 @router.get("/history", response_class=HTMLResponse)
 def history(
     request: Request,
+    page: int = 1,
     cleared: bool = False,
     restored: bool = False,
     db: Session = Depends(get_db),
 ):
     _prune_cleared_history()
     device_id = get_device_id(request)
+    page = max(1, page)
+    total_pages = 1
     try:
+        base = db.query(Scan).filter(Scan.device_id == device_id)
+        total = base.count()
+        # Round up; always at least one page so an empty list still renders.
+        total_pages = max(1, (total + HISTORY_PER_PAGE - 1) // HISTORY_PER_PAGE)
+        page = min(page, total_pages)   # clamp an out-of-range ?page to the last
         scans = (
-            db.query(Scan)
-            .filter(Scan.device_id == device_id)
-            .order_by(desc(Scan.created_at))
-            .limit(10)
+            base.order_by(desc(Scan.created_at))
+            .offset((page - 1) * HISTORY_PER_PAGE)
+            .limit(HISTORY_PER_PAGE)
             .all()
         )
         views = [_scan_view(s) for s in scans]
@@ -317,6 +326,7 @@ def history(
         # DB down: show the page with an "unavailable" notice instead of a 500.
         logger.warning("history query failed — database unavailable: %s", exc)
         views, db_error = [], True
+        page, total_pages = 1, 1
     return templates.TemplateResponse(
         request,
         "history.html",
@@ -328,6 +338,8 @@ def history(
             cleared=cleared,
             restored=restored,
             can_restore=device_id in _CLEARED_HISTORY,
+            page=page,
+            total_pages=total_pages,
         ),
     )
 
@@ -414,6 +426,7 @@ def save_settings(
     request: Request,
     theme: str = Form(...),
     language: str = Form(...),
+    text_size: str = Form("normal"),
 ):
-    prefs.set_prefs(request, theme=theme, language=language)
+    prefs.set_prefs(request, theme=theme, language=language, text_size=text_size)
     return RedirectResponse("/settings?saved=1", status_code=303)
